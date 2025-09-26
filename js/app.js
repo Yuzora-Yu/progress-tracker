@@ -1,4 +1,4 @@
-// Progress Tracker v2.4 — fixed chart sizing, reordered report (badges → diff → chart), goal comparisons, X posts
+// Progress Tracker v2.4 — fixed chart scaling, new report layout (top badges / middle diff / bottom chart)
 document.addEventListener('DOMContentLoaded', () => {
   const KEY = 'progress-tracker-v2';
 
@@ -284,23 +284,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!els.dailyChart) return;
     const canvas = els.dailyChart;
     const ctx = canvas.getContext('2d', { alpha:false });
+
+    // ★縦に伸びる不具合対策：毎回サイズと変換を完全リセット
     const dpr = window.devicePixelRatio || 1;
+    const wCSS = Math.max(320, Math.floor(canvas.clientWidth || canvas.parentElement.clientWidth || 600));
+    const hCSS = Math.max(120, Math.floor(canvas.getBoundingClientRect().height || 180)); // CSS高さ（固定）
 
-    // ▼▼ 縦に拡大する不具合への完全対策 ▼▼
-    const hCSS = (canvas.getAttribute('height')|0) || 180; // 論理高さ(px)
-    const wCSS = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
-
-    // 物理解像度を都度リセット
-    canvas.width  = Math.max(320, Math.floor(wCSS * dpr));
+    // 物理解像度を再設定
+    canvas.width  = Math.floor(wCSS * dpr);
     canvas.height = Math.floor(hCSS * dpr);
 
-    // スタイル高さも固定（ブラウザ差対策）
-    canvas.style.height = hCSS + 'px';
-
-    // transformを必ず初期化（スケール累積阻止）
+    // 変換をリセットしてから dpr を適用（累積拡大を防止）
     ctx.setTransform(1,0,0,1,0,0);
     ctx.scale(dpr, dpr);
-    // ▲▲ ここまで ▲▲
 
     const w = Math.floor(canvas.width / dpr);
     const h = Math.floor(canvas.height / dpr);
@@ -322,4 +318,255 @@ document.addEventListener('DOMContentLoaded', () => {
     const innerH = h - (padT + padB);
 
     // 軸
-    ctx.strokeStyle =
+    ctx.strokeStyle = '#263248';
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, h-padB);
+    ctx.lineTo(w-padR, h-padB);
+    ctx.stroke();
+
+    // 補助線・ラベル
+    ctx.strokeStyle = 'rgba(128,160,200,.16)';
+    ctx.fillStyle = '#9aa6bf';
+    ctx.font = '11px system-ui, sans-serif';
+    [0,0.25,0.5,0.75,1].forEach(p=>{
+      const y = h - padB - innerH*p;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w-padR, y);
+      ctx.stroke();
+      ctx.fillText(String(Math.round(p*100)), 8, y+3);
+    });
+
+    // 折れ線
+    ctx.strokeStyle = '#6ba8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const denom = Math.max(1, chartDays-1);
+    rates.forEach((r,i)=>{
+      const x = padL + innerW*(i/denom);
+      const y = h - padB - innerH*clamp(r,0,1);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    // ドット
+    ctx.fillStyle = '#80ffd4';
+    rates.forEach((r,i)=>{
+      const x = padL + innerW*(i/denom);
+      const y = h - padB - innerH*clamp(r,0,1);
+      ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2); ctx.fill();
+    });
+
+    // 期間ラベル
+    ctx.fillStyle = '#9aa6bf';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(`${dates[0]} 〜 ${dates[dates.length-1]}`, padL, 12);
+  }
+
+  // ---------- challenge ----------
+  function windowStats(fromISO, days){
+    let streak=0, best=0, sum=0;
+    for(let i=0;i<days;i++){
+      const d=addDays(new Date(fromISO), i);
+      const r=dailyScore(d).rate;
+      sum+=r;
+      if(r>=0.6){streak++; best=Math.max(best,streak);} else streak=0;
+    }
+    return { avgRate: days? sum/days:0, bestStreak: best };
+  }
+  function renderChallengeResult(fromISO, days){
+    if(!els.challengeResult) return {avgRate:0,bestStreak:0};
+    const { avgRate, bestStreak } = windowStats(fromISO, days);
+    els.challengeResult.innerHTML = `
+      <div class="card">
+        <div><strong>期間</strong>：${fromISO} 〜 ${addDays(new Date(fromISO), days-1)}</div>
+        <div><strong>平均達成率</strong>：${Math.round(avgRate*100)}%</div>
+        <div><strong>ベスト連続達成日数</strong>：${bestStreak} 日</div>
+      </div>`;
+    return { avgRate, bestStreak };
+  }
+  safeOn(els.calc30,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.remove('last-clicked'); renderChallengeResult(s,30); });
+  safeOn(els.calc100,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.add('last-clicked'); renderChallengeResult(s,100); });
+
+  // ---------- result card (Top badges / Middle diff / Bottom chart) ----------
+  function drawResultCard(info, chartImage){
+    if(!els.resultCard) return;
+    const c = els.resultCard, ctx = c.getContext('2d');
+
+    // 背景
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,c.width,c.height);
+    ctx.fillStyle = '#0b0d12'; ctx.fillRect(0,0,c.width,c.height);
+
+    // ヘッダー
+    ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 66px system-ui, sans-serif'; ctx.fillText('Progress Report', 60, 110);
+    const grad = ctx.createLinearGradient(60,126,520,132); grad.addColorStop(0,'#6ba8ff'); grad.addColorStop(1,'#80ffd4');
+    ctx.fillStyle = grad; ctx.fillRect(60, 126, 520, 6);
+
+    // 上段：30日/100日バッジ（2ブロック）
+    function badge(x,y,w,h,label,val,best){
+      ctx.fillStyle = '#131720'; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle = '#263248'; ctx.strokeRect(x,y,w,h);
+      ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 34px system-ui, sans-serif'; ctx.fillText(label, x+24, y+54);
+      ctx.fillStyle = '#6ba8ff'; ctx.font = 'bold 96px system-ui, sans-serif'; ctx.fillText(`${val}%`, x+24, y+148);
+      ctx.fillStyle = '#9aa6bf'; ctx.font = '28px system-ui, sans-serif'; ctx.fillText(`ベスト連続: ${best} 日`, x+24, y+h-24);
+    }
+    const badgeW = 450, badgeH = 220, pad = 40;
+    badge(60, 170, badgeW, badgeH, '30日 平均達成率', info.thirty.avg, info.thirty.best);
+    badge(60+badgeW+pad, 170, badgeW, badgeH, '100日 平均達成率', info.hundred.avg, info.hundred.best);
+
+    // 中段：数値比較（横一列に強調）
+    const midX = 60, midY = 420, midW = 940, midH = 240;
+    ctx.fillStyle = '#131720'; ctx.fillRect(midX,midY,midW,midH);
+    ctx.strokeStyle = '#263248'; ctx.strokeRect(midX,midY,midW,midH);
+
+    const latestVal = info.latest;
+    const unit = info.unit || '';
+    const cur = info.currentValue;
+    const goal = info.goalValue;
+
+    const fmt = (v)=> (v==null? '—' : `${v}${unit}`);
+    const diff = (a,b)=> (a==null||b==null)? null : (a - b);
+    const sign = (n)=> (n>0? '+' : n<0? '−' : '±');
+
+    const d1 = diff(latestVal, cur);
+    const d2 = diff(latestVal, goal);
+
+    ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 34px system-ui, sans-serif';
+    ctx.fillText('数値比較', midX+18, midY+46);
+
+    ctx.fillStyle = '#9aa6bf'; ctx.font = '26px system-ui, sans-serif';
+    ctx.fillText(`直近値：${fmt(latestVal)} / 基準：${fmt(cur)} / 目標：${fmt(goal)}`, midX+18, midY+86);
+
+    function emphasisRow(y, label, value){
+      ctx.fillStyle = '#1a2333'; ctx.fillRect(midX+12, y-30, midW-24, 44);
+      ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 28px system-ui, sans-serif';
+      ctx.fillText(label, midX+24, y);
+      ctx.fillStyle = '#80ffd4'; ctx.font = 'bold 40px system-ui, sans-serif';
+      ctx.fillText(value, midX+300, y+2);
+    }
+    emphasisRow(midY+136, '直近 − 現在：', d1==null?'—': `${sign(d1).replace('−','-')}${Math.abs(d1).toFixed(2)}${unit}`);
+    emphasisRow(midY+190, '直近 − 目標：', d2==null?'—': `${sign(d2).replace('−','-')}${Math.abs(d2).toFixed(2)}${unit}`);
+
+    // 下段：横長グラフ（全幅）
+    const gx = 60, gy = 690, gw = 940, gh = 420;
+    ctx.fillStyle = '#131720'; ctx.fillRect(gx-10,gy-10,gw+20,gh+20);
+    if(chartImage){
+      ctx.drawImage(chartImage, gx, gy, gw, gh);
+    }else{
+      ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
+      ctx.fillText('グラフを描画できませんでした', gx+20, gy+40);
+    }
+
+    // フッター
+    ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText(`Title: ${info.title} ／ Start: ${info.start} ／ Unit: ${info.unit || '-'}`, 60, 1140);
+    ctx.fillText(`Generated: ${iso(new Date())}`, 60, 1174);
+  }
+
+  // 画像作成
+  safeOn(els.makeCard,'click', async ()=>{
+    drawChart(); // 直前状態でレンダリング
+    let img = null;
+    try{
+      const url = els.dailyChart.toDataURL('image/png');
+      img = await new Promise((res,rej)=>{ const im = new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+    }catch{}
+
+    const s = els.challengeStart?.value || data.profile.startDate || todayISO();
+    const d30 = windowStats(s,30), d100 = windowStats(s,100);
+    const latestVal = latestProgressValue();
+
+    drawResultCard({
+      title: data.profile.goalTitle || '今年の進捗',
+      unit: data.profile.unit || '', start: s,
+      thirty:{avg:Math.round(d30.avgRate*100), best:d30.bestStreak},
+      hundred:{avg:Math.round(d100.avgRate*100), best:d100.bestStreak},
+      currentValue: data.profile.currentValue,
+      goalValue: data.profile.goalValue,
+      latest: latestVal
+    }, img);
+
+    if(els.dlCard && els.resultCard) els.dlCard.href = els.resultCard.toDataURL('image/png');
+  });
+
+  // ---------- X(Twitter) ----------
+  function openXIntent(text){
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if(!win){
+      navigator.clipboard?.writeText(text);
+      alert('投稿テキストをクリップボードにコピーしました。Xに貼り付けて投稿してください。');
+    }
+  }
+
+  safeOn(els.postDaily,'click', ()=>{
+    const site = location.href.split('#')[0];
+    const start = data.profile.startDate || todayISO();
+    const today = todayISO();
+    const days = Math.max(1, Math.floor((new Date(today) - new Date(start))/86400000)+1);
+    const use100 = (els.chartRangeBtns||[]).some(b=>b.classList.contains('is-active') && b.dataset.days==='100');
+    const todayRate = Math.round(dailyScore(today).rate * 100);
+
+    const text = [
+      '今日の進捗メモ✍️',
+      `開始から ${days} 日目。${use100?100:30}日連続達成を目指して継続中！`,
+      `今日のタスク達成率：${todayRate}%`,
+      '#毎日タスク実行チャレンジ',
+      site
+    ].join('\n');
+    openXIntent(text);
+  });
+
+  safeOn(els.postChallenge,'click', ()=>{
+    const s = els.challengeStart?.value || data.profile.startDate || todayISO();
+    const use100 = els.calc100?.classList.contains('last-clicked') || false;
+    const days = use100 ? 100 : 30;
+    const end = addDays(new Date(s), days-1);
+    let resultVal = data.goalProgress[end];
+    if(resultVal==null){
+      const keys = Object.keys(data.goalProgress).sort();
+      for(let i=keys.length-1;i>=0;i--){ if(keys[i] <= end){ resultVal = data.goalProgress[keys[i]]; break; } }
+    }
+    const unit = data.profile.unit || '';
+    const goalV = data.profile.goalValue ?? 0;
+    const ok = resultVal==null ? null : (data.profile.goalDir==='gte' ? resultVal >= goalV : resultVal <= goalV);
+    const text = [
+      `${days}日チャレンジ結果📣`,
+      `目標：${data.profile.goalTitle || '目標'}（目標値 ${goalV}${unit}）`,
+      `結果：${resultVal!=null?resultVal:'—'}${unit} ／ ${ ok==null ? '—' : ok ? '目標達成🎉' : '未達😭'} `,
+      '#毎日タスク実行チャレンジ',
+      location.href.split('#')[0]
+    ].join('\n');
+    openXIntent(text);
+  });
+
+  // ---------- backup ----------
+  safeOn(els.downloadBackup,'click', ()=> downloadJSON('progress-backup.json', data));
+  safeOn(els.uploadBackup,'change', async (e)=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    try{
+      const b = await readJSONFile(f);
+      if(!b.profile || !b.tasks || !b.records) throw new Error('バックアップ形式が不正です');
+      data = b; saveAll(data);
+      hydrateProfile(); renderTasks(); renderRecordInputs(); drawChart();
+      alert('バックアップを復元しました（上書き）。');
+    }catch(err){ alert('復元エラー: '+ err.message); }
+    e.target.value='';
+  });
+
+  // ---------- first render ----------
+  hydrateProfile();
+  if(els.recDate) els.recDate.value = todayISO();
+  renderTasks();
+  renderRecordInputs();
+
+  // 初回描画は幅確定後
+  const startDraw = () => drawChart();
+  if (document.readyState === 'complete') startDraw();
+  else window.addEventListener('load', startDraw, { once:true });
+
+  // リサイズ対応
+  window.addEventListener('resize', ()=> drawChart());
+});
