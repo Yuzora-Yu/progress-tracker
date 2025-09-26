@@ -1,4 +1,4 @@
-// Progress Tracker v2.2 — chart size tuned & X(Twitter) posting
+// Progress Tracker v2.3 — chart fixed size, report with chart, goal comparisons, X posts
 document.addEventListener('DOMContentLoaded', () => {
   const KEY = 'progress-tracker-v2';
 
@@ -26,8 +26,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---------- state ----------
   const defaultData = () => ({
-    version: 2,
-    profile: { goalTitle:'今年の進捗', goalDesc:'', goalValue:100, unit:'pt', startDate:todayISO(), goalDir:'gte' },
+    version: 3,
+    profile: {
+      goalTitle:'今年の進捗',
+      goalDesc:'',
+      startDate:todayISO(),
+      currentValue:null,       // 新：現在の数値（基準）
+      goalValue:100,           // 新：目標値
+      unit:'pt',
+      goalDir:'gte'
+    },
     tasks: [],
     records: {},
     goalProgress: {},
@@ -43,12 +51,15 @@ document.addEventListener('DOMContentLoaded', () => {
       { id: uid(), title:'サンプル：学習', targetPerDay:1, priority:'B' }
     ];
   }
+  // マイグレーション（v2→v3）
+  if (data.profile && data.profile.currentValue === undefined) data.profile.currentValue = null;
   saveAll(data);
 
   // ---------- DOM refs ----------
   const els = {
-    goalTitle: $('goalTitle'), goalDesc: $('goalDesc'), goalValue: $('goalValue'),
-    unit: $('unit'), startDate: $('startDate'), goalDir: $('goalDir'),
+    goalTitle: $('goalTitle'), goalDesc: $('goalDesc'),
+    startDate: $('startDate'), goalDir: $('goalDir'),
+    currentValue: $('currentValue'), goalValue: $('goalValue'), unit: $('unit'),
     saveProfile: $('saveProfile'), profileSaved: $('profileSaved'),
 
     taskList: $('taskList'), addTask: $('addTask'), weightEditor: $('weightEditor'),
@@ -73,9 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const p = data.profile ?? {};
     els.goalTitle.value = p.goalTitle ?? '';
     els.goalDesc.value  = p.goalDesc ?? '';
+    els.startDate.value = p.startDate ?? todayISO();
+    els.currentValue.value = (p.currentValue ?? '') === null ? '' : p.currentValue;
     els.goalValue.value = p.goalValue ?? 0;
     els.unit.value      = p.unit ?? '';
-    els.startDate.value = p.startDate ?? todayISO();
     if(els.goalDir) els.goalDir.value = p.goalDir ?? 'gte';
     if(els.challengeStart) els.challengeStart.value = p.startDate ?? todayISO();
   }
@@ -84,9 +96,10 @@ document.addEventListener('DOMContentLoaded', () => {
     data.profile = {
       goalTitle: (els.goalTitle?.value || '今年の進捗').trim(),
       goalDesc:  (els.goalDesc?.value || '').trim(),
+      startDate: els.startDate?.value || todayISO(),
+      currentValue: (els.currentValue?.value === '' ? null : Number(els.currentValue.value)),
       goalValue: Number(els.goalValue?.value) || 0,
       unit:      (els.unit?.value || '').trim(),
-      startDate: els.startDate?.value || todayISO(),
       goalDir:   els.goalDir?.value || 'gte'
     };
     saveAll(data);
@@ -248,31 +261,47 @@ document.addEventListener('DOMContentLoaded', () => {
     return { rate: max>0 ? total/max : 0 };
   }
 
+  function latestProgressISO(){
+    const keys = Object.keys(data.goalProgress || {}).sort();
+    for(let i=keys.length-1;i>=0;i--){ if(keys[i] <= todayISO()) return keys[i]; }
+    return null;
+  }
+  function latestProgressValue(){
+    const k = latestProgressISO(); return k ? data.goalProgress[k] : null;
+  }
+
   // ---------- chart ----------
   let chartDays = 30;
   (els.chartRangeBtns||[]).forEach(btn=>{
     btn.addEventListener('click', ()=>{
       (els.chartRangeBtns||[]).forEach(b=>b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      chartDays = Number(btn.dataset.days); drawChart();
+      chartDays = Number(btn.dataset.days);
+      drawChart();
     });
   });
 
   function drawChart(){
     if(!els.dailyChart) return;
-    const canvas = els.dailyChart, ctx = canvas.getContext('2d');
+    const canvas = els.dailyChart, ctx = canvas.getContext('2d', { alpha:false });
     const dpr = window.devicePixelRatio || 1;
 
-    // 幅は表示幅に合わせる（レスポンシブ）、高さは属性値（180px）を用いてコンパクト化
-    const w = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
-    const h = canvas.getAttribute('height')|0; // 180
+    // 高さは属性（180）を固定、幅はコンテナに追従、スケール累積を明示的に防止
+    const wCSS = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
+    const hCSS = canvas.getAttribute('height')|0; // 180
 
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,w,h);
+    canvas.width = Math.max(320, Math.floor(wCSS * dpr));
+    canvas.height = Math.floor(hCSS * dpr);
+
+    // transformリセット→dprスケール
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr, dpr);
+
+    const w = Math.floor(canvas.width / dpr);
+    const h = Math.floor(canvas.height / dpr);
 
     // 背景
+    ctx.clearRect(0,0,w,h);
     ctx.fillStyle = '#0e1420';
     ctx.fillRect(0,0,w,h);
 
@@ -280,8 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const end = new Date();
     const dates = [];
     for(let i=chartDays-1;i>=0;i--) dates.push( iso(new Date(end.getTime() - i*86400000)) );
-
-    // 値
     const rates = dates.map(d => dailyScore(d).rate);
 
     // 余白・座標系
@@ -310,12 +337,13 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.fillText(String(Math.round(p*100)), 8, y+3);
     });
 
-    // 線
+    // 折れ線
     ctx.strokeStyle = '#6ba8ff';
     ctx.lineWidth = 2;
     ctx.beginPath();
+    const denom = Math.max(1, chartDays-1);
     rates.forEach((r,i)=>{
-      const x = padL + innerW*(i/(Math.max(1,chartDays-1)));
+      const x = padL + innerW*(i/denom);
       const y = h - padB - innerH*clamp(r,0,1);
       if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     });
@@ -324,9 +352,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ドット
     ctx.fillStyle = '#80ffd4';
     rates.forEach((r,i)=>{
-      const x = padL + innerW*(i/(Math.max(1,chartDays-1)));
+      const x = padL + innerW*(i/denom);
       const y = h - padB - innerH*clamp(r,0,1);
-      ctx.beginPath(); ctx.arc(x,y,2.3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2); ctx.fill();
     });
 
     // 期間ラベル
@@ -355,39 +383,107 @@ document.addEventListener('DOMContentLoaded', () => {
   safeOn(els.calc30,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.remove('last-clicked'); renderChallengeResult(s,30); });
   safeOn(els.calc100,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.add('last-clicked'); renderChallengeResult(s,100); });
 
-  // ---------- result card ----------
-  function drawResultCard(info){
+  // ---------- result card (with chart) ----------
+  function drawResultCard(info, chartImage){
     if(!els.resultCard) return;
     const c = els.resultCard, ctx = c.getContext('2d');
+
+    // 背景
     ctx.fillStyle = '#0b0d12'; ctx.fillRect(0,0,c.width,c.height);
+
+    // タイトル
     ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 72px system-ui, sans-serif'; ctx.fillText('Progress Report', 60, 120);
-    const grad = ctx.createLinearGradient(60,140,460,146); grad.addColorStop(0,'#6ba8ff'); grad.addColorStop(1,'#80ffd4'); ctx.fillStyle = grad; ctx.fillRect(60, 140, 460, 8);
-    ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 58px system-ui, sans-serif'; ctx.fillText(info.title, 60, 230);
-    ctx.fillStyle = '#9aa6bf'; ctx.font = '30px system-ui, sans-serif'; ctx.fillText(`開始日: ${info.start}`, 60, 280);
+    const grad = ctx.createLinearGradient(60,140,520,146); grad.addColorStop(0,'#6ba8ff'); grad.addColorStop(1,'#80ffd4');
+    ctx.fillStyle = grad; ctx.fillRect(60, 140, 520, 8);
+
+    // サブ情報
+    ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 56px system-ui, sans-serif'; ctx.fillText(info.title, 60, 230);
+    ctx.fillStyle = '#9aa6bf'; ctx.font = '30px system-ui, sans-serif';
+    ctx.fillText(`開始日: ${info.start}`, 60, 278);
+    ctx.fillText(`単位: ${info.unit || '-'}`, 60, 314);
+
+    // 左：バッジ（30/100）
     function badge(x,y,label,val,best){
-      ctx.fillStyle = '#131720'; ctx.fillRect(x,y,420,320);
-      ctx.strokeStyle = '#263248'; ctx.strokeRect(x,y,420,320);
-      ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 38px system-ui, sans-serif'; ctx.fillText(label, x+24, y+60);
-      ctx.fillStyle = '#6ba8ff'; ctx.font = 'bold 106px system-ui, sans-serif'; ctx.fillText(`${val}%`, x+24, y+165);
-      ctx.fillStyle = '#9aa6bf'; ctx.font = '30px system-ui, sans-serif'; ctx.fillText(`ベスト連続: ${best} 日`, x+24, y+210);
+      ctx.fillStyle = '#131720'; ctx.fillRect(x,y,420,300);
+      ctx.strokeStyle = '#263248'; ctx.strokeRect(x,y,420,300);
+      ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 34px system-ui, sans-serif'; ctx.fillText(label, x+24, y+54);
+      ctx.fillStyle = '#6ba8ff'; ctx.font = 'bold 96px system-ui, sans-serif'; ctx.fillText(`${val}%`, x+24, y+148);
+      ctx.fillStyle = '#9aa6bf'; ctx.font = '28px system-ui, sans-serif'; ctx.fillText(`ベスト連続: ${best} 日`, x+24, y+190);
     }
     badge(60, 340, '30日 平均達成率', info.thirty.avg, info.thirty.best);
-    badge(540,340, '100日 平均達成率', info.hundred.avg, info.hundred.best);
+    badge(60, 660, '100日 平均達成率', info.hundred.avg, info.hundred.best);
+
+    // 右：グラフ貼り付け（カード内で横長）
+    if(chartImage){
+      const gx = 520, gy = 340, gw = 500, gh = 360; // 右上段
+      ctx.fillStyle = '#131720'; ctx.fillRect(gx-10,gy-10,gw+20,gh+20);
+      ctx.drawImage(chartImage, gx, gy, gw, gh);
+      ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
+      ctx.fillText('直近の達成率（折れ線）', gx, gy+gh+34);
+    }
+
+    // 右：数値比較（現在値 vs 直近 / 目標 vs 直近）
+    const bx = 520, by = 760, bw = 500, bh = 250;
+    ctx.fillStyle = '#131720'; ctx.fillRect(bx-10,by-10,bw+20,bh+20);
+    ctx.strokeStyle = '#263248'; ctx.strokeRect(bx-10,by-10,bw+20,bh+20);
+
+    const latestVal = info.latest;
+    const unit = info.unit || '';
+    const cur = info.currentValue;
+    const goal = info.goalValue;
+
+    const fmt = (v)=> (v==null? '—' : `${v}${unit}`);
+    const diff = (a,b)=> (a==null||b==null)? null : (a - b);
+    const sign = (n)=> (n>0? '+' : n<0? '−' : '±');
+
+    const d1 = diff(latestVal, cur);
+    const d2 = diff(latestVal, goal);
+
+    ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 34px system-ui, sans-serif';
+    ctx.fillText('数値比較', bx, by+34);
+
     ctx.fillStyle = '#9aa6bf'; ctx.font = '26px system-ui, sans-serif';
-    ctx.fillText(`Unit: ${info.unit || '-'}`, 60, 1210);
+    ctx.fillText(`直近値：${fmt(latestVal)}`, bx, by+76);
+    ctx.fillText(`基準（現在）：${fmt(cur)}`, bx, by+112);
+    ctx.fillText(`目標：${fmt(goal)}`, bx, by+148);
+
+    ctx.fillStyle = '#e7ebf3'; ctx.font = '28px system-ui, sans-serif';
+    ctx.fillText(`直近 − 現在： ${d1==null?'—': sign(d1).replace('−','-')}${d1==null?'':Math.abs(d1).toFixed(2)+unit}`, bx, by+196);
+    ctx.fillText(`直近 − 目標： ${d2==null?'—': sign(d2).replace('−','-')}${d2==null?'':Math.abs(d2).toFixed(2)+unit}`, bx, by+234);
+
+    // 下部
+    ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
     ctx.fillText(`Generated: ${iso(new Date())}`, 60, 1246);
-    ctx.fillStyle = '#80ffd4'; ctx.font = '30px system-ui, sans-serif'; ctx.fillText('Share your progress!', 60, 1290);
+    ctx.fillStyle = '#80ffd4'; ctx.font = '28px system-ui, sans-serif';
+    ctx.fillText('Keep going and share your progress!', 60, 1290);
   }
 
-  safeOn(els.makeCard,'click', ()=>{
+  // 画像作成：グラフを画像化して合成
+  safeOn(els.makeCard,'click', async ()=>{
+    drawChart(); // 最新状態に
+    // dailyChart -> Image
+    let img = null;
+    try{
+      const url = els.dailyChart.toDataURL('image/png');
+      img = await new Promise((res,rej)=>{ const im = new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+    }catch{}
+
     const s = els.challengeStart?.value || data.profile.startDate || todayISO();
     const d30 = windowStats(s,30), d100 = windowStats(s,100);
+
+    // 直近値を取得
+    const latestVal = latestProgressValue();
+
     drawResultCard({
       title: data.profile.goalTitle || '今年の進捗',
       unit: data.profile.unit || '', start: s,
       thirty:{avg:Math.round(d30.avgRate*100), best:d30.bestStreak},
-      hundred:{avg:Math.round(d100.avgRate*100), best:d100.bestStreak}
-    });
+      hundred:{avg:Math.round(d100.avgRate*100), best:d100.bestStreak},
+      currentValue: data.profile.currentValue,
+      goalValue: data.profile.goalValue,
+      latest: latestVal
+    }, img);
+
     if(els.dlCard && els.resultCard) els.dlCard.href = els.resultCard.toDataURL('image/png');
   });
 
@@ -395,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function openXIntent(text){
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
     const win = window.open(url, '_blank', 'noopener,noreferrer');
-    if(!win){ // ブロック等
+    if(!win){
       navigator.clipboard?.writeText(text);
       alert('投稿テキストをクリップボードにコピーしました。Xに貼り付けて投稿してください。');
     }
@@ -407,9 +503,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const today = todayISO();
     const days = Math.max(1, Math.floor((new Date(today) - new Date(start))/86400000)+1);
     const use100 = (els.chartRangeBtns||[]).some(b=>b.classList.contains('is-active') && b.dataset.days==='100');
+
+    // 今日の達成率（追記）
+    const todayRate = Math.round(dailyScore(today).rate * 100);
+
     const text = [
       '今日の進捗メモ✍️',
       `開始から ${days} 日目。${use100?100:30}日連続達成を目指して継続中！`,
+      `今日のタスク達成率：${todayRate}%`,
       '#毎日タスク実行チャレンジ',
       site
     ].join('\n');
@@ -427,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
       for(let i=keys.length-1;i>=0;i--){ if(keys[i] <= end){ resultVal = data.goalProgress[keys[i]]; break; } }
     }
     const unit = data.profile.unit || '';
-    const goalV = data.profile.goalValue || 0;
+    const goalV = data.profile.goalValue ?? 0;
     const ok = resultVal==null ? null : (data.profile.goalDir==='gte' ? resultVal >= goalV : resultVal <= goalV);
     const text = [
       `${days}日チャレンジ結果📣`,
@@ -459,8 +560,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTasks();
   renderRecordInputs();
 
-  // 初回描画はレスポンシブ幅が確定してから
+  // 初回描画は幅確定後
   const startDraw = () => drawChart();
   if (document.readyState === 'complete') startDraw();
   else window.addEventListener('load', startDraw, { once:true });
+
+  // リサイズ対応
+  window.addEventListener('resize', ()=> drawChart());
 });
