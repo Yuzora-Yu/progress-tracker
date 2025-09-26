@@ -64,4 +64,72 @@
         <button id="downloadTemplate">テンプレートをダウンロード（設定のみ）</button>
         <label class="filelike">
           テンプレートを読み込む
-          <input id="uploadTemplate" type="file" accept="appl
+          <input id="uploadTemplate" type="file" accept="application/json" hidden>
+        </label>
+      </div>
+    </section>
+
+    <!-- 3. 日々の記録入力 -->
+    <section>
+      <h2>3. 日々のタスク結果入力</h2>
+      <div class="row">
+        <label>日付 <input id="recDate" type="date"></label>
+        <button id="copyPrev">前日コピー</button>
+        <button id="clearToday">今日をクリア</button>
+      </div>
+      <div id="recordInputs"></div>
+      <div class="row">
+        <button id="saveRecord">今日の記録を保存</button>
+        <span id="recordSaved" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- 4. 可視化 -->
+    <section>
+      <h2>4. 可視化</h2>
+      <div class="row">
+        <button data-days="30" class="chartRange is-active">直近30日</button>
+        <button data-days="100" class="chartRange">直近100日</button>
+      </div>
+      <canvas id="dailyChart" height="220" aria-label="日次達成率グラフ"></canvas>
+      <p class="muted">グラフは各日の<strong>加重達成率</strong>（0〜100%）。</p>
+    </section>
+
+    <!-- 5. チャレンジ -->
+    <section>
+      <h2>5. 30日 / 100日チャレンジ</h2>
+      <div class="row">
+        <label>開始日 <input id="challengeStart" type="date"></label>
+        <button id="calc30">30日集計</button>
+        <button id="calc100">100日集計</button>
+      </div>
+      <div id="challengeResult" class="cards"></div>
+      <div class="row">
+        <button id="makeCard">結果カード画像を作成</button>
+        <a id="dlCard" class="button" download="result-card.png">画像をダウンロード</a>
+      </div>
+      <div class="cardPreview">
+        <canvas id="resultCard" width="1080" height="1350"></canvas>
+      </div>
+    </section>
+
+    <!-- 6. バックアップ -->
+    <section>
+      <h2>6. バックアップ/復元</h2>
+      <div class="row">
+        <button id="downloadBackup">バックアップをダウンロード（全データ）</button>
+        <label class="filelike">
+          バックアップから復元（上書き）
+          <input id="uploadBackup" type="file" accept="application/json" hidden>
+        </label>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap muted small">
+    <p>保存先：この端末の <code>localStorage</code>（外部送信なし）。定期的にバックアップJSONのダウンロード推奨。</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
