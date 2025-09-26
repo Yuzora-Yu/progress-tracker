@@ -64,7 +64,7 @@ input[type="date"]{padding:.5em}
 #taskList .task .del:hover{border-color:var(--danger);color:#ff8793}
 .chartRange.is-active{border-color:var(--primary);box-shadow:0 0 0 2px rgba(107,168,255,.15) inset}
 
-/* ① 目標の設定：行構成を指定（デスクトップ） */
+/* 目標の設定：行構成（デスクトップ） */
 .profile-grid{
   display:grid;
   gap:.8rem;
@@ -85,7 +85,7 @@ input[type="date"]{padding:.5em}
 .profile-grid .pg.memo   { grid-area:memo; }
 .profile-grid .pg.actions{ grid-area:actions; }
 
-/* 幅が狭いときは縦積み */
+/* 狭い幅では縦並び */
 @media (max-width: 720px){
   .profile-grid{
     grid-template-columns: 1fr;
@@ -101,8 +101,12 @@ input[type="date"]{padding:.5em}
   }
 }
 
-/* ② グラフは幅100%、高さはHTML属性(180px)を使用。display:blockで余白を安定化 */
-#dailyChart{width:100%;display:block;}
+/* グラフの縦伸び対策：高さをCSSで固定し、JSはその高さを参照 */
+#dailyChart{
+  width:100%;
+  height:180px;   /* ←固定高さ */
+  display:block;  /* 余白の不確定要素を排除 */
+}
 
 /* 画像プレビュー */
 .cardPreview{
