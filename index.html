@@ -36,15 +36,25 @@
         <label>目標タイトル
           <input id="goalTitle" type="text" placeholder="例：体重を◯kgに／英単語◯語学習 など">
         </label>
+
         <label>開始日
           <input id="startDate" type="date">
         </label>
-        <label>目標値（数値）
-          <input id="goalValue" type="number" step="0.01" min="0">
+
+        <!-- 新：現在の数値（基準） -->
+        <label>現在の数値（基準）
+          <input id="currentValue" type="number" step="0.01" placeholder="例：いまの体重・現在値など">
         </label>
+
+        <!-- 既存：目標値（数値） → ラベル明確化 -->
+        <label>目標値（数値）
+          <input id="goalValue" type="number" step="0.01" min="0" placeholder="例：最終的な目標値">
+        </label>
+
         <label>単位（自由入力）
           <input id="unit" type="text" placeholder="kg / 回 / 語 / km…">
         </label>
+
         <label>到達条件
           <select id="goalDir">
             <option value="gte">以上で達成（例：貯金100万円以上）</option>
@@ -52,9 +62,11 @@
           </select>
         </label>
       </div>
+
       <label>目標のメモ
         <textarea id="goalDesc" rows="2" placeholder="健康維持のために など"></textarea>
       </label>
+
       <div class="row">
         <button class="btn primary" id="saveProfile" type="button">保存</button>
         <span class="muted" id="profileSaved"></span>
@@ -117,10 +129,11 @@
         <button data-days="30" class="btn chip chartRange is-active" type="button">直近30日</button>
         <button data-days="100" class="btn chip chartRange" type="button">直近100日</button>
       </div>
+
       <div class="card">
-        <!-- 高さ 180 に縮小、幅はCSSで100% -->
+        <!-- 高さは固定、幅は100%（CSS） -->
         <canvas id="dailyChart" height="180" aria-label="日次達成率グラフ"></canvas>
-        <p class="muted small">グラフは各日の<strong>加重達成率</strong>（0〜100%）。</p>
+        <p class="muted small">各日の<strong>加重達成率</strong>（0〜100%）。</p>
       </div>
 
       <div class="row">
