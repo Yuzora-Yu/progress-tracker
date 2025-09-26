@@ -31,8 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
       goalTitle:'今年の進捗',
       goalDesc:'',
       startDate:todayISO(),
-      currentValue:null,       // 新：現在の数値（基準）
-      goalValue:100,           // 新：目標値
+      currentValue:null,       // 現在の数値（基準）
+      goalValue:100,           // 目標値
       unit:'pt',
       goalDir:'gte'
     },
@@ -286,14 +286,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = els.dailyChart, ctx = canvas.getContext('2d', { alpha:false });
     const dpr = window.devicePixelRatio || 1;
 
-    // 高さは属性（180）を固定、幅はコンテナに追従、スケール累積を明示的に防止
+    // 高さは属性（180）を固定、幅はコンテナに追従、スケール累積を明示的に防止（バグ修正）
     const wCSS = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
     const hCSS = canvas.getAttribute('height')|0; // 180
 
     canvas.width = Math.max(320, Math.floor(wCSS * dpr));
     canvas.height = Math.floor(hCSS * dpr);
 
-    // transformリセット→dprスケール
+    // transformリセット→dprスケール（交互クリックで拡大していく問題の決定的対策）
     ctx.setTransform(1,0,0,1,0,0);
     ctx.scale(dpr, dpr);
 
@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
   safeOn(els.calc30,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.remove('last-clicked'); renderChallengeResult(s,30); });
   safeOn(els.calc100,'click',()=>{ const s = els.challengeStart?.value || data.profile.startDate || todayISO(); els.calc100?.classList.add('last-clicked'); renderChallengeResult(s,100); });
 
-  // ---------- result card (with chart) ----------
+  // ---------- result card (with chart & emphasized diffs) ----------
   function drawResultCard(info, chartImage){
     if(!els.resultCard) return;
     const c = els.resultCard, ctx = c.getContext('2d');
@@ -413,17 +413,17 @@ document.addEventListener('DOMContentLoaded', () => {
     badge(60, 340, '30日 平均達成率', info.thirty.avg, info.thirty.best);
     badge(60, 660, '100日 平均達成率', info.hundred.avg, info.hundred.best);
 
-    // 右：グラフ貼り付け（カード内で横長）
+    // 右：グラフ貼り付け
     if(chartImage){
-      const gx = 520, gy = 340, gw = 500, gh = 360; // 右上段
+      const gx = 520, gy = 340, gw = 500, gh = 360;
       ctx.fillStyle = '#131720'; ctx.fillRect(gx-10,gy-10,gw+20,gh+20);
       ctx.drawImage(chartImage, gx, gy, gw, gh);
       ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
       ctx.fillText('直近の達成率（折れ線）', gx, gy+gh+34);
     }
 
-    // 右：数値比較（現在値 vs 直近 / 目標 vs 直近）
-    const bx = 520, by = 760, bw = 500, bh = 250;
+    // 右下：数値比較（強調）
+    const bx = 520, by = 760, bw = 500, bh = 260;
     ctx.fillStyle = '#131720'; ctx.fillRect(bx-10,by-10,bw+20,bh+20);
     ctx.strokeStyle = '#263248'; ctx.strokeRect(bx-10,by-10,bw+20,bh+20);
 
@@ -436,8 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const diff = (a,b)=> (a==null||b==null)? null : (a - b);
     const sign = (n)=> (n>0? '+' : n<0? '−' : '±');
 
-    const d1 = diff(latestVal, cur);
-    const d2 = diff(latestVal, goal);
+    const d1 = diff(latestVal, cur);   // 直近 - 現在
+    const d2 = diff(latestVal, goal);  // 直近 - 目標
 
     ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 34px system-ui, sans-serif';
     ctx.fillText('数値比較', bx, by+34);
@@ -447,9 +447,16 @@ document.addEventListener('DOMContentLoaded', () => {
     ctx.fillText(`基準（現在）：${fmt(cur)}`, bx, by+112);
     ctx.fillText(`目標：${fmt(goal)}`, bx, by+148);
 
-    ctx.fillStyle = '#e7ebf3'; ctx.font = '28px system-ui, sans-serif';
-    ctx.fillText(`直近 − 現在： ${d1==null?'—': sign(d1).replace('−','-')}${d1==null?'':Math.abs(d1).toFixed(2)+unit}`, bx, by+196);
-    ctx.fillText(`直近 − 目標： ${d2==null?'—': sign(d2).replace('−','-')}${d2==null?'':Math.abs(d2).toFixed(2)+unit}`, bx, by+234);
+    // 強調行（背景帯）
+    function emphasisRow(y, label, val){
+      ctx.fillStyle = '#1a2333'; ctx.fillRect(bx, y-28, bw-20, 40);
+      ctx.fillStyle = '#e7ebf3'; ctx.font = 'bold 30px system-ui, sans-serif';
+      ctx.fillText(label, bx+12, y);
+      ctx.fillStyle = '#80ffd4'; ctx.font = 'bold 40px system-ui, sans-serif';
+      ctx.fillText(val, bx+220, y+2);
+    }
+    emphasisRow(by+200, '直近 − 現在：', d1==null?'—': `${sign(d1).replace('−','-')}${Math.abs(d1).toFixed(2)}${unit}`);
+    emphasisRow(by+242, '直近 − 目標：', d2==null?'—': `${sign(d2).replace('−','-')}${Math.abs(d2).toFixed(2)}${unit}`);
 
     // 下部
     ctx.fillStyle = '#9aa6bf'; ctx.font = '24px system-ui, sans-serif';
