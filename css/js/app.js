@@ -37,7 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveAll = (d) => localStorage.setItem(KEY, JSON.stringify(d));
 
   let data = loadAll() ?? defaultData();
-  // 初回: タスクが空ならサンプルを入れる
   if (!data.tasks || data.tasks.length===0) {
     data.tasks = [
       { id: uid(), title:'サンプル：運動', targetPerDay:1, priority:'A' },
@@ -115,7 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `).join('')}
     `;
-    // 行イベント
     els.taskList.querySelectorAll('.task').forEach(row=>{
       const id = row.getAttribute('data-id'); if(!id) return;
       row.querySelector('.t-title')?.addEventListener('input', e=>{
@@ -138,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // 重み編集
     if(els.weightEditor){
       els.weightEditor.innerHTML = Object.entries(data.weights || {}).map(([k,v])=>`
         <label>${k}
@@ -182,13 +179,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!els.recordInputs) return;
     const day = els.recDate?.value || todayISO();
     const rec = data.records[day] ?? {};
-
-    // 目標推移
     if(els.goalProgress){
       const gp = data.goalProgress[day];
       els.goalProgress.value = (gp ?? '');
     }
-
     els.recordInputs.innerHTML = data.tasks.length
       ? `<h3 class="muted small" style="margin-top:0">タスク実績</h3>` +
         data.tasks.map(t => `
@@ -197,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <input data-id="${t.id}" class="rec" type="number" step="0.01" min="0" value="${rec[t.id] ?? ''}" placeholder="実績">
           </label>`).join('')
       : `<p class="muted">タスクが未登録です。「日々のタスク定義」から追加してください。</p>`;
-
     els.recordInputs.querySelectorAll('.rec').forEach(inp=>{
       inp.addEventListener('input', e=>{
         const id = e.target.getAttribute('data-id');
@@ -211,8 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if(els.recDate) els.recDate.value = todayISO();
-  safeOn(els.recDate, 'change', ()=> renderRecordInputs());
-
+  safeOn(els.recDate,'change', ()=> renderRecordInputs());
   safeOn(els.copyPrev,'click',()=>{
     const day = els.recDate?.value || todayISO();
     const prev = addDays(new Date(day), -1);
@@ -223,26 +215,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if(gp!=null) data.goalProgress[day] = gp;
     saveAll(data); renderRecordInputs();
   });
-
   safeOn(els.clearToday,'click',()=>{
     const day = els.recDate?.value || todayISO();
     delete data.records[day];
     delete data.goalProgress[day];
     saveAll(data); renderRecordInputs();
   });
-
   safeOn(els.saveRecord,'click',()=>{
     const day = els.recDate?.value || todayISO();
-    // 目標推移
     const gv = els.goalProgress?.value;
     if(gv === '' || isNaN(Number(gv))) delete data.goalProgress[day];
     else data.goalProgress[day] = Number(gv);
-
-    // 空キー削除
     const obj = data.records[day] ?? {};
     for(const k of Object.keys(obj)){ if (obj[k]==null || isNaN(obj[k])) delete obj[k]; }
     if (Object.keys(obj).length===0) delete data.records[day]; else data.records[day]=obj;
-
     saveAll(data);
     if(els.recordSaved){ els.recordSaved.textContent='保存しました'; setTimeout(()=> els.recordSaved.textContent='', 1400); }
     drawChart();
@@ -257,11 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const weight = (data.weights || {})[t.priority] ?? 1;
       const target = (t.targetPerDay ?? 0);
       const rate = target > 0 ? Math.min(actual / target, 1) : (actual>0 ? 1 : 0);
-      total += rate * weight;
-      max   += 1 * weight;
+      total += rate * weight; max += 1 * weight;
     }
-    const norm = max > 0 ? total / max : 0;
-    return { rate: norm };
+    return { rate: max>0 ? total/max : 0 };
   }
 
   // ---------- chart ----------
@@ -270,68 +254,39 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', ()=>{
       (els.chartRangeBtns||[]).forEach(b=>b.classList.remove('is-active'));
       btn.classList.add('is-active');
-      chartDays = Number(btn.dataset.days);
-      drawChart();
+      chartDays = Number(btn.dataset.days); drawChart();
     });
   });
 
   function drawChart(){
     if(!els.dailyChart) return;
-    const canvas = els.dailyChart;
-    const ctx = canvas.getContext('2d');
+    const canvas = els.dailyChart, ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
     const h = canvas.getAttribute('height')|0;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,w,h);
+    canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
     ctx.fillStyle = '#0e1420'; ctx.fillRect(0,0,w,h);
-
-    const end = new Date();
-    const dates = [];
+    const end = new Date(); const dates = [];
     for(let i=chartDays-1;i>=0;i--) dates.push( iso(new Date(end.getTime() - i*86400000)) );
     const rates = dates.map(d => dailyScore(d).rate);
-
     const pad = 36, innerW = w - pad*2, innerH = h - pad*2;
     ctx.strokeStyle = '#263248'; ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,h-pad); ctx.lineTo(w-pad,h-pad); ctx.stroke();
     ctx.strokeStyle = 'rgba(128,160,200,.16)';
-    [0,0.25,0.5,0.75,1].forEach(p=>{
-      const y = h - pad - innerH * p;
-      ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke();
-      ctx.fillStyle = '#9aa6bf'; ctx.fillText(String(Math.round(p*100)), 8, y+3);
-    });
-
+    [0,0.25,0.5,0.75,1].forEach(p=>{ const y=h-pad-innerH*p; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke(); ctx.fillStyle='#9aa6bf'; ctx.fillText(String(Math.round(p*100)), 8, y+3); });
     ctx.strokeStyle = '#6ba8ff'; ctx.lineWidth = 2; ctx.beginPath();
-    rates.forEach((r,i)=>{
-      const x = pad + innerW * (i/(chartDays-1));
-      const y = h - pad - innerH * clamp(r,0,1);
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    });
+    rates.forEach((r,i)=>{ const x=pad+innerW*(i/(chartDays-1)); const y=h-pad-innerH*clamp(r,0,1); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
     ctx.stroke();
-
     ctx.fillStyle = '#80ffd4';
-    rates.forEach((r,i)=>{
-      const x = pad + innerW * (i/(chartDays-1));
-      const y = h - pad - innerH * clamp(r,0,1);
-      ctx.beginPath(); ctx.arc(x,y,2.3,0,Math.PI*2); ctx.fill();
-    });
-
-    ctx.fillStyle = '#9aa6bf';
-    ctx.fillText(`${dates[0]} 〜 ${dates[dates.length-1]}`, pad, 18);
+    rates.forEach((r,i)=>{ const x=pad+innerW*(i/(chartDays-1)); const y=h-pad-innerH*clamp(r,0,1); ctx.beginPath(); ctx.arc(x,y,2.3,0,Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = '#9aa6bf'; ctx.fillText(`${dates[0]} 〜 ${dates[dates.length-1]}`, pad, 18);
   }
 
   // ---------- challenge ----------
   function windowStats(fromISO, days){
     let streak=0, best=0, sum=0;
-    for(let i=0;i<days;i++){
-      const d = addDays(new Date(fromISO), i);
-      const r = dailyScore(d).rate;
-      sum += r;
-      if(r>=0.6){ streak++; if(streak>best) best=streak; } else { streak=0; }
-    }
-    const avg = days>0 ? sum/days : 0;
-    return { avgRate: avg, bestStreak: best };
+    for(let i=0;i<days;i++){ const d=addDays(new Date(fromISO), i); const r=dailyScore(d).rate; sum+=r; if(r>=0.6){streak++; best=Math.max(best,streak);} else streak=0; }
+    return { avgRate: days? sum/days:0, bestStreak: best };
   }
   function renderChallengeResult(fromISO, days){
     if(!els.challengeResult) return {avgRate:0,bestStreak:0};
@@ -388,22 +343,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navigator.share) navigator.share({ text }).catch(()=> navigator.clipboard?.writeText(text));
     else { navigator.clipboard?.writeText(text); alert('投稿文をコピーしました。お好みのSNSで貼り付けてください。'); }
   }
-
   safeOn(els.postDaily,'click', ()=>{
     const site = location.href.split('#')[0];
     const start = data.profile.startDate || todayISO();
     const today = todayISO();
     const days = Math.max(1, Math.floor((new Date(today) - new Date(start))/86400000)+1);
-    const targetWindow = (Array.isArray(els.chartRangeBtns) && els.chartRangeBtns.some(b=>b.classList.contains('is-active') && b.dataset.days==='100')) ? 100 : 30;
+    const use100 = (els.chartRangeBtns||[]).some(b=>b.classList.contains('is-active') && b.dataset.days==='100');
     const text = [
       '今日も忘れずにタスク実行したよ！',
-      `今日は${days}日目。${targetWindow}日連続達成目指して頑張ろう！！`,
+      `今日は${days}日目。${use100?100:30}日連続達成目指して頑張ろう！！`,
       '#毎日タスク実行チャレンジ',
       site
     ].join('\n');
     shareOrCopy(text);
   });
-
   safeOn(els.postChallenge,'click', ()=>{
     const s = els.challengeStart?.value || data.profile.startDate || todayISO();
     const use100 = els.calc100?.classList.contains('last-clicked') || false;
