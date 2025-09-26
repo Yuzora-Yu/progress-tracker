@@ -32,44 +32,45 @@
     <!-- 1. 目標設定 -->
     <section id="profile">
       <h2>1. 目標の設定</h2>
-      <div class="grid">
-        <label>目標タイトル
+
+      <!-- 指示どおりの行構成 -->
+      <div class="profile-grid card">
+        <!-- 1行目 -->
+        <label class="pg title">目標タイトル
           <input id="goalTitle" type="text" placeholder="例：体重を◯kgに／英単語◯語学習 など">
         </label>
-
-        <label>開始日
+        <label class="pg start">開始日
           <input id="startDate" type="date">
         </label>
 
-        <!-- 新：現在の数値（基準） -->
-        <label>現在の数値（基準）
+        <!-- 2行目 -->
+        <label class="pg current">現在の数値（基準）
           <input id="currentValue" type="number" step="0.01" placeholder="例：いまの体重・現在値など">
         </label>
-
-        <!-- 既存：目標値（数値） → ラベル明確化 -->
-        <label>目標値（数値）
+        <label class="pg goal">目標値（数値）
           <input id="goalValue" type="number" step="0.01" min="0" placeholder="例：最終的な目標値">
         </label>
-
-        <label>単位（自由入力）
+        <label class="pg unit">単位（自由入力）
           <input id="unit" type="text" placeholder="kg / 回 / 語 / km…">
         </label>
 
-        <label>到達条件
+        <!-- 3行目 -->
+        <label class="pg dir">到達条件
           <select id="goalDir">
             <option value="gte">以上で達成（例：貯金100万円以上）</option>
             <option value="lte">以下で達成（例：体重75kg以下）</option>
           </select>
         </label>
-      </div>
 
-      <label>目標のメモ
-        <textarea id="goalDesc" rows="2" placeholder="健康維持のために など"></textarea>
-      </label>
+        <!-- 4行目 -->
+        <label class="pg memo">目標のメモ
+          <textarea id="goalDesc" rows="2" placeholder="健康維持のために など"></textarea>
+        </label>
 
-      <div class="row">
-        <button class="btn primary" id="saveProfile" type="button">保存</button>
-        <span class="muted" id="profileSaved"></span>
+        <div class="pg actions row">
+          <button class="btn primary" id="saveProfile" type="button">保存</button>
+          <span class="muted" id="profileSaved"></span>
+        </div>
       </div>
     </section>
 
@@ -98,7 +99,6 @@
     <section id="records">
       <h2>3. 日々のタスク結果入力</h2>
 
-      <!-- 目標の推移 -->
       <div class="card">
         <div class="row">
           <label>日付 <input id="recDate" type="date"></label>
@@ -113,7 +113,6 @@
         </div>
       </div>
 
-      <!-- タスク実績 -->
       <div id="recordInputs" class="card"></div>
 
       <div class="row">
@@ -131,7 +130,6 @@
       </div>
 
       <div class="card">
-        <!-- 高さは固定、幅は100%（CSS） -->
         <canvas id="dailyChart" height="180" aria-label="日次達成率グラフ"></canvas>
         <p class="muted small">各日の<strong>加重達成率</strong>（0〜100%）。</p>
       </div>
