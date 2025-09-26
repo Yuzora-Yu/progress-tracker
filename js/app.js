@@ -1,4 +1,4 @@
-// Progress Tracker v2.1 — robust init & safe bindings
+// Progress Tracker v2.2 — chart size tuned & X(Twitter) posting
 document.addEventListener('DOMContentLoaded', () => {
   const KEY = 'progress-tracker-v2';
 
@@ -262,24 +262,77 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!els.dailyChart) return;
     const canvas = els.dailyChart, ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
+
+    // 幅は表示幅に合わせる（レスポンシブ）、高さは属性値（180px）を用いてコンパクト化
     const w = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
-    const h = canvas.getAttribute('height')|0;
-    canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = '#0e1420'; ctx.fillRect(0,0,w,h);
-    const end = new Date(); const dates = [];
+    const h = canvas.getAttribute('height')|0; // 180
+
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    // 背景
+    ctx.fillStyle = '#0e1420';
+    ctx.fillRect(0,0,w,h);
+
+    // 日付配列
+    const end = new Date();
+    const dates = [];
     for(let i=chartDays-1;i>=0;i--) dates.push( iso(new Date(end.getTime() - i*86400000)) );
+
+    // 値
     const rates = dates.map(d => dailyScore(d).rate);
-    const pad = 36, innerW = w - pad*2, innerH = h - pad*2;
-    ctx.strokeStyle = '#263248'; ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,h-pad); ctx.lineTo(w-pad,h-pad); ctx.stroke();
-    ctx.strokeStyle = 'rgba(128,160,200,.16)';
-    [0,0.25,0.5,0.75,1].forEach(p=>{ const y=h-pad-innerH*p; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(w-pad,y); ctx.stroke(); ctx.fillStyle='#9aa6bf'; ctx.fillText(String(Math.round(p*100)), 8, y+3); });
-    ctx.strokeStyle = '#6ba8ff'; ctx.lineWidth = 2; ctx.beginPath();
-    rates.forEach((r,i)=>{ const x=pad+innerW*(i/(chartDays-1)); const y=h-pad-innerH*clamp(r,0,1); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+
+    // 余白・座標系
+    const padL = 36, padR = 16, padT = 14, padB = 28;
+    const innerW = w - (padL + padR);
+    const innerH = h - (padT + padB);
+
+    // 軸
+    ctx.strokeStyle = '#263248';
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, h-padB);
+    ctx.lineTo(w-padR, h-padB);
     ctx.stroke();
+
+    // 補助線＆ラベル
+    ctx.strokeStyle = 'rgba(128,160,200,.16)';
+    ctx.fillStyle = '#9aa6bf';
+    ctx.font = '11px system-ui, sans-serif';
+    [0,0.25,0.5,0.75,1].forEach(p=>{
+      const y = h - padB - innerH*p;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w-padR, y);
+      ctx.stroke();
+      ctx.fillText(String(Math.round(p*100)), 8, y+3);
+    });
+
+    // 線
+    ctx.strokeStyle = '#6ba8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    rates.forEach((r,i)=>{
+      const x = padL + innerW*(i/(Math.max(1,chartDays-1)));
+      const y = h - padB - innerH*clamp(r,0,1);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    // ドット
     ctx.fillStyle = '#80ffd4';
-    rates.forEach((r,i)=>{ const x=pad+innerW*(i/(chartDays-1)); const y=h-pad-innerH*clamp(r,0,1); ctx.beginPath(); ctx.arc(x,y,2.3,0,Math.PI*2); ctx.fill(); });
-    ctx.fillStyle = '#9aa6bf'; ctx.fillText(`${dates[0]} 〜 ${dates[dates.length-1]}`, pad, 18);
+    rates.forEach((r,i)=>{
+      const x = padL + innerW*(i/(Math.max(1,chartDays-1)));
+      const y = h - padB - innerH*clamp(r,0,1);
+      ctx.beginPath(); ctx.arc(x,y,2.3,0,Math.PI*2); ctx.fill();
+    });
+
+    // 期間ラベル
+    ctx.fillStyle = '#9aa6bf';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(`${dates[0]} 〜 ${dates[dates.length-1]}`, padL, 12);
   }
 
   // ---------- challenge ----------
@@ -338,11 +391,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if(els.dlCard && els.resultCard) els.dlCard.href = els.resultCard.toDataURL('image/png');
   });
 
-  // ---------- Post ----------
-  function shareOrCopy(text){
-    if (navigator.share) navigator.share({ text }).catch(()=> navigator.clipboard?.writeText(text));
-    else { navigator.clipboard?.writeText(text); alert('投稿文をコピーしました。お好みのSNSで貼り付けてください。'); }
+  // ---------- X(Twitter) posting ----------
+  function openXIntent(text){
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if(!win){ // ブロック等
+      navigator.clipboard?.writeText(text);
+      alert('投稿テキストをクリップボードにコピーしました。Xに貼り付けて投稿してください。');
+    }
   }
+
   safeOn(els.postDaily,'click', ()=>{
     const site = location.href.split('#')[0];
     const start = data.profile.startDate || todayISO();
@@ -350,13 +408,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const days = Math.max(1, Math.floor((new Date(today) - new Date(start))/86400000)+1);
     const use100 = (els.chartRangeBtns||[]).some(b=>b.classList.contains('is-active') && b.dataset.days==='100');
     const text = [
-      '今日も忘れずにタスク実行したよ！',
-      `今日は${days}日目。${use100?100:30}日連続達成目指して頑張ろう！！`,
+      '今日の進捗メモ✍️',
+      `開始から ${days} 日目。${use100?100:30}日連続達成を目指して継続中！`,
       '#毎日タスク実行チャレンジ',
       site
     ].join('\n');
-    shareOrCopy(text);
+    openXIntent(text);
   });
+
   safeOn(els.postChallenge,'click', ()=>{
     const s = els.challengeStart?.value || data.profile.startDate || todayISO();
     const use100 = els.calc100?.classList.contains('last-clicked') || false;
@@ -371,14 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const goalV = data.profile.goalValue || 0;
     const ok = resultVal==null ? null : (data.profile.goalDir==='gte' ? resultVal >= goalV : resultVal <= goalV);
     const text = [
-      `${days}日チャレンジ終了！`,
-      `目標：目標値 ${goalV}${unit}（${data.profile.goalTitle || '目標'}）`,
-      `結果：結果値 ${resultVal!=null?resultVal:'—'}${unit}（${ ok==null ? '—' : ok ? '目標達成😊' : '目標達成ならず😢'}）`,
-      'ここからも気を抜かずに頑張ろう～✨',
+      `${days}日チャレンジ結果📣`,
+      `目標：${data.profile.goalTitle || '目標'}（目標値 ${goalV}${unit}）`,
+      `結果：${resultVal!=null?resultVal:'—'}${unit} ／ ${ ok==null ? '—' : ok ? '目標達成🎉' : '未達😭'} `,
       '#毎日タスク実行チャレンジ',
       location.href.split('#')[0]
     ].join('\n');
-    shareOrCopy(text);
+    openXIntent(text);
   });
 
   // ---------- backup ----------
@@ -400,5 +458,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if(els.recDate) els.recDate.value = todayISO();
   renderTasks();
   renderRecordInputs();
-  drawChart();
+
+  // 初回描画はレスポンシブ幅が確定してから
+  const startDraw = () => drawChart();
+  if (document.readyState === 'complete') startDraw();
+  else window.addEventListener('load', startDraw, { once:true });
 });
