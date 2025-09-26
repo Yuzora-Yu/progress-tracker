@@ -2,66 +2,78 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>今年の進捗トラッカー（MVP）</title>
+  <title>今年の進捗トラッカー</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="目標・日々のタスクを管理して達成率を可視化。テンプレ保存/復元、バックアップ、結果カード画像出力に対応。">
+  <meta name="description" content="目標と日々のタスクを可視化。テンプレ保存・バックアップ・結果カード・シェア文作成に対応。">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="wrap">
-    <h1>今年の進捗トラッカー（MVP）</h1>
-    <p class="muted">ローカル保存・静的サイト（GitHub Pages対応）</p>
+  <header class="wrap header">
+    <div class="brand">
+      <div class="logo">PT</div>
+      <div>
+        <h1>今年の進捗トラッカー</h1>
+        <p class="muted">ローカル保存 / GitHub Pages 対応</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="#profile">目標</a>
+      <a href="#tasks">タスク</a>
+      <a href="#records">記録</a>
+      <a href="#charts">可視化</a>
+      <a href="#challenge">チャレンジ</a>
+      <a href="#backup">バックアップ</a>
+    </nav>
   </header>
 
   <main class="wrap">
+
     <!-- 1. 目標設定 -->
-    <section>
+    <section id="profile">
       <h2>1. 目標の設定</h2>
       <div class="grid">
-        <div>
-          <label>目標タイトル
-            <input id="goalTitle" type="text" placeholder="例：今年のラン">
-          </label>
-        </div>
-        <div>
-          <label>開始日
-            <input id="startDate" type="date">
-          </label>
-        </div>
-        <div>
-          <label>目標値（数値）
-            <input id="goalValue" type="number" step="0.01" min="0">
-          </label>
-        </div>
-        <div>
-          <label>単位（自由入力）
-            <input id="unit" type="text" placeholder="km / 回 / ページ…">
-          </label>
-        </div>
+        <label>目標タイトル
+          <input id="goalTitle" type="text" placeholder="例：体重を◯kgに／英単語◯語学習 など">
+        </label>
+        <label>開始日
+          <input id="startDate" type="date">
+        </label>
+        <label>目標値（数値）
+          <input id="goalValue" type="number" step="0.01" min="0">
+        </label>
+        <label>単位（自由入力）
+          <input id="unit" type="text" placeholder="kg / 回 / 語 / km…">
+        </label>
+        <label>到達条件
+          <select id="goalDir">
+            <option value="gte">以上で達成（例：貯金100万円以上）</option>
+            <option value="lte">以下で達成（例：体重75kg以下）</option>
+          </select>
+        </label>
       </div>
       <label>目標のメモ
         <textarea id="goalDesc" rows="2" placeholder="健康維持のために など"></textarea>
       </label>
       <div class="row">
-        <button id="saveProfile">保存</button>
+        <button class="btn primary" id="saveProfile">保存</button>
         <span class="muted" id="profileSaved"></span>
       </div>
     </section>
 
     <!-- 2. タスク定義 -->
-    <section>
+    <section id="tasks">
       <h2>2. 日々のタスク定義</h2>
       <p class="muted">重要度：S/A/B/C/D、任意で1日の目標回数（target）を設定</p>
-      <div id="taskList"></div>
+      <div id="taskList" class="card"></div>
       <div class="row">
-        <button id="addTask">＋ タスクを追加</button>
+        <button class="btn" id="addTask">＋ タスクを追加</button>
       </div>
-      <details>
+      <details class="card">
         <summary>重要度の重み（上級者向け）</summary>
         <div id="weightEditor" class="grid narrow"></div>
       </details>
       <div class="row">
-        <button id="downloadTemplate">テンプレートをダウンロード（設定のみ）</button>
+        <button class="btn" id="downloadTemplate">テンプレートをダウンロード（設定のみ）</button>
         <label class="filelike">
           テンプレートを読み込む
           <input id="uploadTemplate" type="file" accept="application/json" hidden>
@@ -69,64 +81,83 @@
       </div>
     </section>
 
-    <!-- 3. 日々の記録入力 -->
-    <section>
+    <!-- 3. 日々の記録 -->
+    <section id="records">
       <h2>3. 日々のタスク結果入力</h2>
-      <div class="row">
-        <label>日付 <input id="recDate" type="date"></label>
-        <button id="copyPrev">前日コピー</button>
-        <button id="clearToday">今日をクリア</button>
+
+      <!-- 目標の推移（最上段） -->
+      <div class="card">
+        <div class="row">
+          <label>日付 <input id="recDate" type="date"></label>
+          <button class="btn" id="copyPrev">前日コピー</button>
+          <button class="btn ghost" id="clearToday">今日をクリア</button>
+        </div>
+        <div class="grid">
+          <label>※目標の現在値（推移）
+            <input id="goalProgress" type="number" step="0.01" placeholder="例：本日の体重など">
+          </label>
+          <div class="help muted">投稿文やチャレンジ結果で使用します（任意）</div>
+        </div>
       </div>
-      <div id="recordInputs"></div>
+
+      <!-- タスク実績 -->
+      <div id="recordInputs" class="card"></div>
+
       <div class="row">
-        <button id="saveRecord">今日の記録を保存</button>
+        <button class="btn primary" id="saveRecord">今日の記録を保存</button>
         <span id="recordSaved" class="muted"></span>
       </div>
     </section>
 
     <!-- 4. 可視化 -->
-    <section>
+    <section id="charts">
       <h2>4. 可視化</h2>
       <div class="row">
-        <button data-days="30" class="chartRange is-active">直近30日</button>
-        <button data-days="100" class="chartRange">直近100日</button>
+        <button data-days="30" class="btn chip chartRange is-active">直近30日</button>
+        <button data-days="100" class="btn chip chartRange">直近100日</button>
       </div>
-      <canvas id="dailyChart" height="220" aria-label="日次達成率グラフ"></canvas>
-      <p class="muted">グラフは各日の<strong>加重達成率</strong>（0〜100%）。</p>
-    </section>
+      <div class="card">
+        <canvas id="dailyChart" height="260" aria-label="日次達成率グラフ"></canvas>
+        <p class="muted small">グラフは各日の<strong>加重達成率</strong>（0〜100%）。</p>
+      </div>
 
-    <!-- 5. チャレンジ -->
-    <section>
-      <h2>5. 30日 / 100日チャレンジ</h2>
       <div class="row">
-        <label>開始日 <input id="challengeStart" type="date"></label>
-        <button id="calc30">30日集計</button>
-        <button id="calc100">100日集計</button>
-      </div>
-      <div id="challengeResult" class="cards"></div>
-      <div class="row">
-        <button id="makeCard">結果カード画像を作成</button>
-        <a id="dlCard" class="button" download="result-card.png">画像をダウンロード</a>
+        <button class="btn" id="makeCard">画像作成</button>
+        <a class="btn" id="dlCard" download="result-card.png">画像ダウンロード</a>
+        <button class="btn accent" id="postDaily">Post（今日の進捗）</button>
       </div>
       <div class="cardPreview">
         <canvas id="resultCard" width="1080" height="1350"></canvas>
       </div>
     </section>
 
+    <!-- 5. チャレンジ -->
+    <section id="challenge">
+      <h2>5. 30日 / 100日チャレンジ</h2>
+      <div class="row">
+        <label>開始日 <input id="challengeStart" type="date"></label>
+        <button class="btn" id="calc30">30日集計</button>
+        <button class="btn" id="calc100">100日集計</button>
+        <button class="btn accent" id="postChallenge">Post（結果）</button>
+      </div>
+      <div id="challengeResult" class="cards"></div>
+    </section>
+
     <!-- 6. バックアップ -->
-    <section>
+    <section id="backup">
       <h2>6. バックアップ/復元</h2>
       <div class="row">
-        <button id="downloadBackup">バックアップをダウンロード（全データ）</button>
+        <button class="btn" id="downloadBackup">バックアップをダウンロード（全データ）</button>
         <label class="filelike">
           バックアップから復元（上書き）
           <input id="uploadBackup" type="file" accept="application/json" hidden>
         </label>
       </div>
     </section>
+
   </main>
 
-  <footer class="wrap muted small">
+  <footer class="wrap muted small footer">
     <p>保存先：この端末の <code>localStorage</code>（外部送信なし）。定期的にバックアップJSONのダウンロード推奨。</p>
   </footer>
 
