@@ -118,14 +118,15 @@
         <button data-days="100" class="btn chip chartRange" type="button">直近100日</button>
       </div>
       <div class="card">
-        <canvas id="dailyChart" height="260" aria-label="日次達成率グラフ"></canvas>
+        <!-- 高さ 180 に縮小、幅はCSSで100% -->
+        <canvas id="dailyChart" height="180" aria-label="日次達成率グラフ"></canvas>
         <p class="muted small">グラフは各日の<strong>加重達成率</strong>（0〜100%）。</p>
       </div>
 
       <div class="row">
         <button class="btn" id="makeCard" type="button">画像作成</button>
         <a class="btn" id="dlCard" download="result-card.png">画像ダウンロード</a>
-        <button class="btn accent" id="postDaily" type="button">Post（今日の進捗）</button>
+        <button class="btn accent" id="postDaily" type="button">Xに投稿（今日の進捗）</button>
       </div>
       <div class="cardPreview">
         <canvas id="resultCard" width="1080" height="1350"></canvas>
@@ -139,7 +140,7 @@
         <label>開始日 <input id="challengeStart" type="date"></label>
         <button class="btn" id="calc30" type="button">30日集計</button>
         <button class="btn" id="calc100" type="button">100日集計</button>
-        <button class="btn accent" id="postChallenge" type="button">Post（結果）</button>
+        <button class="btn accent" id="postChallenge" type="button">Xに投稿（結果）</button>
       </div>
       <div id="challengeResult" class="cards"></div>
     </section>
